@@ -1,6 +1,8 @@
 # Azure DevOps Pipeline Monitoring with Azure AI
 
-This repository provides steps to set up an Azure DevOps pipeline and use Azure AI to monitor and analyze performance metrics, as well as predict future trends.
+This repository provides steps to set up an Azure DevOps pipeline and use Azure AI to monitor and analyze performance metrics, as well as predict future trends. It is created on belhalf of the wedoAI2024. 
+
+![wedoAI2024](/images/wedoAI2024.png)
 
 ## Steps to Monitor Azure DevOps Pipeline with Azure AI
 
@@ -12,11 +14,7 @@ This repository provides steps to set up an Azure DevOps pipeline and use Azure 
      - `collect_data.py`: Collects data from the Azure DevOps pipeline.
      - `upload_data.py`: Uploads the collected data to an Azure Storage Account.
 
-   After running the pipeline, the data will be collected and uploaded to the Azure Storage Account.
-
-2. **Set Up Azure Machine Learning Workspace**:
-   - Go to the [Azure Portal](https://portal.azure.com/).
-   - Create a new Azure Machine Learning workspace.
+   After running the pipeline, the data will be collected and uploaded to the Azure Storage Account. it will create several resources for you included an Azure Storage Account, Azure Application Insights and Azure Machine Learning Workspace.
 
 3. **Collect Data from Azure Storage Account**:
    - Import the data from the Azure Storage Account to Azure Machine Learning Studio.
