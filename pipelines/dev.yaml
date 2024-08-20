@@ -1,0 +1,137 @@
+parameters:
+  - name: context
+    displayName: Context
+    type: string
+    default: dev
+  - name: apply
+    displayName: Apply
+    type: boolean
+    default: true
+  - name: destroy
+    displayName: Destroy
+    type: boolean
+    default: false
+
+trigger: none
+
+variables:
+  - group: MyVariableGroup
+  - name: serviceConnection
+    value: 'SP'
+  - name: backendAzureRmKey
+    value: 'wedoai-${{ parameters.context }}.tfstate'
+  - name: workingDirectory
+    value: "$(System.DefaultWorkingDirectory)/terraform/"
+  - name: backendAzureRmResourceGroupName
+    value: 'terraform-tfstate-rg'
+  - name: backendAzureRmStorageAccountName
+    value: 'terraformstate122024'
+  - name: backendAzureRmContainerName
+    value: 'tfstate'
+  - name: CONTAINER_NAME
+    value: build-data
+
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+  - stage: Deploy
+    displayName: Deploy with Terraform
+    jobs:
+      - job: deploy
+        displayName: Deploy with Terraform
+        pool: 
+          vmImage: ubuntu-latest 
+        steps:
+          - checkout: self
+            displayName: Checkout Terraform Module
+          - task: TerraformInstaller@0
+            displayName: Install Terraform
+            inputs:
+              terraformVersion: 'latest'
+          - task: TerraformTaskV4@4
+            displayName: Terraform Init
+            inputs:
+              provider: 'azurerm'
+              command: 'init'
+              workingDirectory: "${{ variables.workingDirectory }}"
+              backendServiceArm: '${{ variables.serviceConnection }}'
+              backendAzureRmResourceGroupName: "${{ variables.backendAzureRmResourceGroupName }}"
+              backendAzureRmStorageAccountName: "${{ variables.backendAzureRmStorageAccountName }}"
+              backendAzureRmContainerName: "${{ variables.backendAzureRmContainerName }}"
+              backendAzureRmKey: "${{ variables.backendAzureRmKey }}"
+            env:
+              ARM_USE_AZUREAD: true 
+
+          - task: TerraformTaskV4@4
+            condition: eq('${{ parameters.destroy }}', 'true')
+            displayName: Terraform Destroy
+            name: terraformDestroy
+            inputs:
+              provider: "azurerm"
+              command: "destroy"
+              commandOptions: '-var="context=${{ parameters.context }}"'
+              workingDirectory: "${{ variables.workingDirectory }}"
+              environmentServiceNameAzureRM: '${{ variables.serviceConnection }}'
+                  
+          - task: TerraformTaskV4@4
+            displayName: Terraform Plan
+            # Run plan if apply is true, or if both apply and destroy are false
+            condition: or(and(succeeded(), eq('${{ parameters.apply }}', 'true')), and(succeeded(), eq('${{ parameters.apply }}', 'false'), eq('${{ parameters.destroy }}', 'false')))
+            name: terraformPlan
+            inputs:
+              provider: 'azurerm'
+              command: "plan"
+              commandOptions: '-var="context=${{ parameters.context }}" -out=$(Build.SourceBranchName).tfplan'
+              workingDirectory: "${{ variables.workingDirectory }}"
+              environmentServiceNameAzureRM: '${{ variables.serviceConnection }}'
+
+          - task: TerraformTaskV4@4
+            displayName: Terraform Apply
+            inputs:
+              provider: 'azurerm'
+              command: 'apply'
+              commandOptions: $(Build.SourceBranchName).tfplan
+              workingDirectory: "${{ variables.workingDirectory }}"
+              environmentServiceNameAzureRM: '${{ variables.serviceConnection }}'
+            env:
+              ARM_USE_AZUREAD: true
+
+  - stage: MonitorMetrics
+    displayName: 'Monitor Metrics Stage'
+    dependsOn: Deploy
+    jobs:
+      - job: MonitorMetricsJob
+        displayName: 'Monitor Metrics Job'
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '3.9'  # Specify a compatible Python version
+              addToPath: true
+
+          - script: |
+              python -m pip install --upgrade pip setuptools wheel
+            displayName: 'Upgrade pip, setuptools, and wheel'
+
+          - script: |
+              python -m pip install --upgrade pip setuptools wheel
+            displayName: 'Upgrade pip and setuptools'
+
+          - script: |
+              python -m pip install --upgrade pip
+              pip install azure-devops msrest azure-storage-blob
+              python scripts/collect-data.py
+            displayName: 'Collect Pipeline Data'
+            env:
+              AZURE_DEVOPS_PAT: $(AZURE_DEVOPS_PAT)  
+
+          - script: |
+              python scripts/upload-data.py
+            displayName: 'Upload to Azure to storage account'
+            env:
+              AZURE_STORAGE_CONNECTION_STRING: $(AZURE_STORAGE_CONNECTION_STRING)
+              CONTAINER_NAME: "${{ variables.CONTAINER_NAME }}"
+              LOCAL_FILE_PATH: $(LOCAL_FILE_PATH) 

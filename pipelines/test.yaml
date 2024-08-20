@@ -1,0 +1,37 @@
+trigger:
+- main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  azureSubscription: '<Your Azure Subscription>'
+  resourceGroup: '<Your Resource Group>'
+  workspaceName: '<Your Workspace Name>'
+  servicePrincipalId: '<Your Service Principal ID>'
+  servicePrincipalKey: '<Your Service Principal Key>'
+  tenantId: '<Your Tenant ID>'
+
+steps:
+- task: UsePythonVersion@0
+  inputs:
+    versionSpec: '3.x'
+    addToPath: true
+
+- script: |
+    python -m pip install --upgrade pip
+    pip install azureml-sdk
+  displayName: 'Install Azure ML SDK'
+
+- script: |
+    az login --service-principal -u $(servicePrincipalId) -p $(servicePrincipalKey) --tenant $(tenantId)
+    az ml workspace show -w $(workspaceName) -g $(resourceGroup)
+  displayName: 'Authenticate with Azure'
+
+- script: |
+    python train_model.py
+  displayName: 'Train Model'
+
+- script: |
+    python deploy_model.py
+  displayName: 'Deploy Model'
